@@ -5,9 +5,6 @@ import axios from "axios";
 import fs from "fs";
 import path from "path";
 import { OpenAI } from "openai";
-import ffmpeg from "fluent-ffmpeg";
-import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 dotenv.config();
 
@@ -18,7 +15,6 @@ const server = app.listen(port, () => {
 });
 
 const wss = new WebSocketServer({ server });
-
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 wss.on("connection", (ws) => {
@@ -45,24 +41,11 @@ wss.on("connection", (ws) => {
       if (data.event === "stop") {
         console.log("🔴 Stream stopped. Procesando...");
 
-        const rawPath = path.join(process.cwd(), "temp_audio.raw");
-        const wavPath = path.join(process.cwd(), "temp_audio.wav");
-        fs.writeFileSync(rawPath, Buffer.concat(audioChunks));
+        // 1. Guardar archivo WAV directamente
+        const wavPath = path.join(process.cwd(), "audio.wav");
+        fs.writeFileSync(wavPath, Buffer.concat(audioChunks));
 
-        // Convertir RAW -> WAV usando ffmpeg
-        await new Promise((resolve, reject) => {
-          ffmpeg(rawPath)
-            .inputFormat("mulaw")
-            .audioFrequency(8000)
-            .audioChannels(1)
-            .audioCodec("pcm_s16le")
-            .format("wav")
-            .on("end", resolve)
-            .on("error", reject)
-            .save(wavPath);
-        });
-
-        // Transcripción con Whisper
+        // 2. Transcripción con Whisper
         const transcription = await openai.audio.transcriptions.create({
           file: fs.createReadStream(wavPath),
           model: "whisper-1",
@@ -72,7 +55,7 @@ wss.on("connection", (ws) => {
         const text = transcription.text;
         console.log("💬 Cliente dijo:", text);
 
-        // Obtener respuesta con GPT
+        // 3. Obtener respuesta con GPT
         const gptRes = await openai.chat.completions.create({
           model: "gpt-4o",
           messages: [
@@ -84,10 +67,10 @@ wss.on("connection", (ws) => {
         const reply = gptRes.choices[0].message.content;
         console.log("🤖 Milo responde:", reply);
 
-        // Convertir respuesta a voz (ElevenLabs)
+        // 4. Convertir respuesta a voz (ElevenLabs)
         const audioRes = await axios({
           method: "POST",
-          url: "https://api.elevenlabs.io/v1/text-to-speech/ZpEtuMdTIlJXYXAhevhG/stream",
+          url: "https://api.elevenlabs.io/v1/text-to-speech/CnB4uv7QeZvfkVTBRFNv/stream",
           headers: {
             "xi-api-key": process.env.ELEVEN_API_KEY,
             "Content-Type": "application/json"
@@ -103,11 +86,10 @@ wss.on("connection", (ws) => {
           }
         });
 
-        // Enviar audio a Twilio
+        // 5. Enviar voz de Milo a Twilio
         ws.send(audioRes.data);
 
-        // Borrar archivos temporales
-        fs.unlinkSync(rawPath);
+        // 6. Eliminar audio temporal
         fs.unlinkSync(wavPath);
       }
     } catch (err) {
@@ -123,4 +105,3 @@ wss.on("connection", (ws) => {
 app.get("/", (_, res) => {
   res.send("Milo AI backend is running 🚀");
 });
-
