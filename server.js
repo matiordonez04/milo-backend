@@ -2,14 +2,16 @@ import express from "express";
 import { WebSocketServer } from "ws";
 import dotenv from "dotenv";
 import axios from "axios";
-import OpenAI from "openai";
+import fs from "fs";
+import path from "path";
+import { OpenAI } from "openai";
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 const server = app.listen(port, () => {
-  console.log(`Milo AI backend running on port ${port}`);
+  console.log(`🚀 Milo AI backend running on port ${port}`);
 });
 
 const wss = new WebSocketServer({ server });
@@ -45,16 +47,18 @@ wss.on("connection", (ws) => {
 
         // 1. Guardar audio
         const fullAudio = Buffer.concat(audioChunks);
+        const audioPath = path.join(process.cwd(), "temp_audio.wav");
+        fs.writeFileSync(audioPath, fullAudio);
 
         // 2. Transcribir con Whisper
         const transcription = await openai.audio.transcriptions.create({
-          file: new Blob([fullAudio], { type: "audio/mulaw; rate=8000" }),
+          file: fs.createReadStream(audioPath),
           model: "whisper-1",
           language: "es"
         });
 
         const text = transcription.text;
-        console.log("📝 Cliente dijo:", text);
+        console.log("💬 Cliente dijo:", text);
 
         // 3. Obtener respuesta con GPT
         const gptRes = await openai.chat.completions.create({
@@ -66,12 +70,12 @@ wss.on("connection", (ws) => {
         });
 
         const reply = gptRes.choices[0].message.content;
-        console.log("🧠 Milo responde:", reply);
+        console.log("🤖 Milo responde:", reply);
 
         // 4. Convertir respuesta en voz (ElevenLabs)
         const audioRes = await axios({
           method: "POST",
-          url: "https://api.elevenlabs.io/v1/text-to-speech/bIHbv24MWmeRgasZH58o/stream",
+          url: "https://api.elevenlabs.io/v1/text-to-speech/bIHbv24MwmeRgasZH58o/stream",
           headers: {
             "xi-api-key": process.env.ELEVEN_API_KEY,
             "Content-Type": "application/json"
@@ -89,6 +93,9 @@ wss.on("connection", (ws) => {
 
         // 5. Enviar audio a Twilio
         ws.send(audioRes.data);
+
+        // 6. Borrar archivo temporal
+        fs.unlinkSync(audioPath);
       }
     } catch (err) {
       console.error("❌ Error:", err.message);
@@ -96,10 +103,10 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
-    console.log("🔌 Cliente desconectado");
+    console.log("👋 Cliente desconectado");
   });
 });
 
-app.get("/", (req, res) => {
+app.get("/", (_, res) => {
   res.send("Milo AI backend is running 🚀");
 });
