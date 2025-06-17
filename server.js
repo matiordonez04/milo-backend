@@ -87,7 +87,7 @@ wss.on("connection", (ws) => {
         // Convertir respuesta a voz (ElevenLabs)
         const audioRes = await axios({
           method: "POST",
-          url: "https://api.elevenlabs.io/v1/text-to-speech/bIHbv24MwmeRgasZH58o/stream",
+          url: "https://api.elevenlabs.io/v1/text-to-speech/ZpEtuMdTIlJXYXAhevhG/stream",
           headers: {
             "xi-api-key": process.env.ELEVEN_API_KEY,
             "Content-Type": "application/json"
